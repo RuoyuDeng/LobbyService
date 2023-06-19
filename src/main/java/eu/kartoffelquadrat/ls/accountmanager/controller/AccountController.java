@@ -6,8 +6,18 @@ import eu.kartoffelquadrat.ls.accountmanager.model.PlayerRepository;
 import eu.kartoffelquadrat.ls.gameregistry.controller.RegistryController;
 import eu.kartoffelquadrat.ls.gameregistry.controller.RegistryException;
 import eu.kartoffelquadrat.ls.lobby.control.SessionController;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.Principal;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.FilenameUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,7 +28,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Rest controller for all account-related operations. Covers account related,
@@ -40,6 +52,9 @@ public class AccountController {
   private PlayerRepository playerRepository;
   @Autowired
   private RegistryController registryController;
+
+  @Autowired
+  private PlayerImageManager playerImageManager;
 
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
   @GetMapping(value = "/api/users", produces = "application/json; charset=utf-8")
@@ -76,6 +91,52 @@ public class AccountController {
     playerRepository.save(player);
     return ResponseEntity.ok("Player added.");
   }
+
+
+  @PreAuthorize("hasAnyAuthority('ROLE_PLAYER','ROLE_ADMIN')")
+  @PostMapping("/api/users/images/{username}")
+  public ResponseEntity<String> uploadImage(@PathVariable String username,
+                                            @RequestParam("file") MultipartFile imageFile) {
+
+    // check if user exists
+    if (!playerRepository.existsById(username)) {
+      return new ResponseEntity<>("User does not exist!", HttpStatus.BAD_REQUEST);
+    }
+
+    // check if image file is valid (1)
+    if (imageFile.isEmpty()) {
+      return new ResponseEntity<>("Please select a file!", HttpStatus.BAD_REQUEST);
+    }
+
+    // check if image file is valid (2)
+    if (!FilenameUtils.getExtension(imageFile.getOriginalFilename()).equalsIgnoreCase("png")) {
+      return new ResponseEntity<>("Only PNG files are allowed!", HttpStatus.BAD_REQUEST);
+    }
+
+
+    String fullImageName = imageFile.getOriginalFilename();
+    String imageUserName = fullImageName.substring(0, fullImageName.lastIndexOf('.'));
+    // check if the username provided matches with the name of the file, if not
+    // rename the file to match with the username
+    String storeFileName;
+    if (!username.equalsIgnoreCase(imageUserName)) {
+      storeFileName = username + ".png";
+    } else {
+      storeFileName = fullImageName;
+    }
+
+    try {
+      playerImageManager.storeImage(imageFile, storeFileName);
+    } catch (IOException e) {
+      return new ResponseEntity<>("File failed to be stored!", HttpStatus.BAD_REQUEST);
+    }
+
+    return new ResponseEntity<>("Successfully uploaded - " +
+        storeFileName, new HttpHeaders(), HttpStatus.OK);
+
+  }
+
+
 
   /**
    * Delete a specific account from the database, identified by name. If the account ais associated
