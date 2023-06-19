@@ -17,6 +17,7 @@ import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -137,6 +138,28 @@ public class AccountController {
   }
 
 
+  @PreAuthorize("hasAnyAuthority('ROLE_PLAYER','ROLE_ADMIN')")
+  @GetMapping("/api/users/images/{username}")
+  public ResponseEntity<Resource> getImage(@PathVariable String username) {
+    // check if user exists
+    if (!playerRepository.existsById(username)) {
+      return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+    }
+
+    Resource resource = playerImageManager.getImage(username);
+    //Logger logger = LoggerFactory.getLogger(AccountController.class);
+    //logger.warn("Resource exists: " + resource.exists() +
+    //    "\nResource readable: " + resource.isReadable());
+    if (!resource.exists() || !resource.isReadable()) {
+      resource = playerImageManager.getImage("unknown");
+    }
+    //logger.warn("File name: " + resource.getFilename());
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            "inline; filename=\"" + resource.getFilename() + "\"")
+        .body(resource);
+  }
+
 
   /**
    * Delete a specific account from the database, identified by name. If the account ais associated
@@ -185,6 +208,15 @@ public class AccountController {
       } // delete user from database
     }
     playerRepository.deleteById(name);
+
+    // delete user image
+    try {
+      playerImageManager.deleteImage(name);
+    } catch (IOException e) {
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+          .body("User image can not be deleted!");
+    }
+
 
     return ResponseEntity.status(HttpStatus.OK).body(null);
   }
