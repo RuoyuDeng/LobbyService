@@ -3,6 +3,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Component;
@@ -37,8 +41,20 @@ public class PlayerImageManager {
    */
 
   public void deleteImage(String username) throws IOException {
-    Path path = Paths.get(fileStorePath + username + ".png").normalize();
-    Files.delete(path);
+    try (Stream<Path> imagePathsStream = Files.list(Paths.get(fileStorePath))) {
+      List<String> fileNames = imagePathsStream
+          .filter(Files::isRegularFile)
+          .map(Path::getFileName)
+          .map(Path::toString)
+          .collect(Collectors.toList());
+      if (fileNames.stream().anyMatch(fileName -> fileName.contains(username))) {
+        // only delete the user image file if there is such a image file
+        Path userImagePath = Paths.get(fileStorePath + username + ".png").normalize();
+        Files.delete(userImagePath);
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
   }
 
 

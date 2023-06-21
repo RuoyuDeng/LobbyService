@@ -147,9 +147,6 @@ public class AccountController {
     }
 
     Resource resource = playerImageManager.getImage(username);
-    //Logger logger = LoggerFactory.getLogger(AccountController.class);
-    //logger.warn("Resource exists: " + resource.exists() +
-    //    "\nResource readable: " + resource.isReadable());
     if (!resource.exists() || !resource.isReadable()) {
       resource = playerImageManager.getImage("unknown");
     }
